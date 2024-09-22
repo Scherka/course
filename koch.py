@@ -129,7 +129,7 @@ def dctMulReverse(mat):
 
 counter = 0
 watermark = '01'
-img = Image.open(r"C:\Users\Сергей\Desktop\Курсач 2\Пикчи\Girl.bmp")
+img = Image.open(r".\Pictures\Girl.bmp")
 wc, hc = img.size  # получение размеров путсого контейнер
 pix = img.load()
 new = Image.new("RGB", (wc, hc))
