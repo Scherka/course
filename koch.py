@@ -1,7 +1,7 @@
 from PIL import Image, ImageDraw
 import numpy as np
 from decimal import Decimal
-
+from scipy.linalg import hadamard
 eps = 5  # сила встраивания
 # координаты внутри блоков, соответствующие средней частотной полосе
 coefs = [[0, 6], [0, 7], [1, 6], [1, 7], [2, 4], [2, 5], [3, 4], [3, 5], [4, 2], [4, 3], [5, 2], [5, 3], [6, 0], [6, 1],
@@ -10,7 +10,7 @@ redDct = []
 redDctOg = []
 greenDct = []
 blueDct = []
-
+hadamard_matrix = hadamard(8)
 
 # проверка матрицы одного цвета на возможность встраивания бита 1
 def checkColor1(mat, k1, k2):
@@ -122,15 +122,18 @@ dct = dctCreate()
 def dctMul(mat):
     mat1 = np.matmul(np.transpose(dct), mat)
     return np.matmul(mat1, dct)
-
-
 def dctMulReverse(mat):
     mat1 = np.matmul(dct, mat)
     return np.matmul(mat1, np.transpose(dct)).astype(int)
-
+def hadMul(mat):
+    mat1 = np.matmul(np.transpose(hadamard_matrix), mat)
+    return (np.matmul(mat1, hadamard_matrix))
+def hadMulReverse(mat):
+    mat1 = np.matmul(hadamard_matrix, mat)
+    return (np.matmul(mat1, np.transpose(hadamard_matrix))/64).astype(int)
 
 watermark = '10101010'
-def readImage(img):
+def readImage(img, func=dctMul):
     counter = 0
     wc, hc = img.size  # получение размеров путсого контейнер
     pix = img.load()
@@ -159,16 +162,16 @@ def readImage(img):
             matb = np.array(mat1b)
             if counter < 8:
                 redDctOg.append(matr)
-                redDct.append(dctMul(matr))
-                greenDct.append(dctMul(matg))
-                blueDct.append(dctMul(matb))
+                redDct.append(func(matr))
+                greenDct.append(func(matg))
+                blueDct.append(func(matb))
                 #counter += 1
             jc += 8
         jc = 0
         ic += 8
     return redDct, greenDct, blueDct
 
-def writeImage(img, redDct, greenDct, blueDct):
+def writeImage(img, redDct, greenDct, blueDct, newFile, func = dctMulReverse):
     wc, hc = img.size  # получение размеров путсого контейнер
     pix = img.load()
     new = Image.new("RGB", (wc, hc))
@@ -180,9 +183,9 @@ def writeImage(img, redDct, greenDct, blueDct):
     blueMat = []
     while ic + 8 <= wc:
         while jc + 8 <= hc:
-            redMat.append(dctMulReverse(redDct[k]))
-            greenMat.append(dctMulReverse(greenDct[k]))
-            blueMat.append(dctMulReverse(blueDct[k]))
+            redMat.append(func(redDct[k]))
+            greenMat.append(func(greenDct[k]))
+            blueMat.append(func(blueDct[k]))
             for i in range(8):
                 for j in range(8):
                     draw.point((ic + i, jc + j), (redMat[k][i][j], greenMat[k][i][j], blueMat[k][i][j]))
@@ -190,19 +193,19 @@ def writeImage(img, redDct, greenDct, blueDct):
             jc += 8
         jc = 0
         ic += 8
-    new.save(r".\Pictures\Girl-new.bmp")
+    new.save(newFile)
 # print(len(redDct))
-redDct, greenDct, blueDct = readImage(Image.open(r".\Pictures\Girl.bmp"))
-print(len(redDct))
-print(len(greenDct))
-print(len(blueDct))
-result, k1, k2 = getKs()
-print(result, k1, k2)
-redDct, greenDct, blueDct = inject(redDct, greenDct, blueDct, watermark, k1, k2)
-writeImage(Image.open(r".\Pictures\Girl.bmp"), redDct, greenDct, blueDct)
-
-redDct, greenDct, blueDct = readImage(Image.open(r".\Pictures\Girl-new.bmp"))
-print(extract(redDct, greenDct, blueDct, k1, k2))
+# redDct, greenDct, blueDct = readImage(Image.open(r".\Pictures\Girl.bmp"))
+# print(len(redDct))
+# print(len(greenDct))
+# print(len(blueDct))
+# result, k1, k2 = getKs()
+# print(result, k1, k2)
+# redDct, greenDct, blueDct = inject(redDct, greenDct, blueDct, watermark, k1, k2)
+# writeImage(Image.open(r".\Pictures\Girl.bmp"), redDct, greenDct, blueDct)
+#
+# redDct, greenDct, blueDct = readImage(Image.open(r".\Pictures\Girl-new.bmp"))
+# print(extract(redDct, greenDct, blueDct, k1, k2))
 ''''
 inject0(k1, k2)
 redDctRev = dctMulReverse(redDct[0])
