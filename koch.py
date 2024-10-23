@@ -92,9 +92,9 @@ def injectMat0(matOrig, k1, k2):
     # print(mat)
     return mat
 
-def extract(redDct, greenDct, blueDct, k1, k2):
+def extract(redDct, greenDct, blueDct, k1, k2, l):
     mes = ""
-    for k in range(len(redDct)):
+    for k in range(l):
         if k%4==0:
             if abs(redDct[k][k1[0]][k1[1]]) > abs(redDct[k][k2[0]][k2[1]]):
                 mes += '1'
@@ -132,7 +132,6 @@ def hadMulReverse(mat):
     mat1 = np.matmul(hadamard_matrix, mat)
     return (np.matmul(mat1, np.transpose(hadamard_matrix))/64).astype(int)
 
-watermark = '10101010'
 def readImage(img, func=dctMul):
     counter = 0
     wc, hc = img.size  # получение размеров путсого контейнер

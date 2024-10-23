@@ -8,7 +8,7 @@ from PyQt5.QtGui import QPixmap
 from PyQt5.QtCore import Qt
 from PIL import Image, ImageFilter
 import koch as ko
-import functions as fun
+from code import code, decode
 import os
 
 
@@ -51,6 +51,7 @@ def chooseMes():
     showImage(workdir2, lb_mes)
 
 def checkMessage():
+    btn_inject.setEnabled(True)
     line_text = text_mes.text()
     if line_text != "" and line_text.replace("0", "").replace("1", "") == "" and current_picture != "":
         btn_inject.setEnabled(True)
@@ -79,26 +80,30 @@ def injectMessage():
     ko.greenDct = []
     ko.blueDct = []
     print("2:", current_picture)
-    print(text_mes.text())
+    print(code(text_mes.text()))
     redDct, greenDct, blueDct = ko.readImage(Image.open(current_picture), func)
     result, k1, k2 = ko.getKs()
-    print(result, k1, k2)
-    redDct, greenDct, blueDct = ko.inject(redDct, greenDct, blueDct, text_mes.text(), k1, k2)
+    print(len(code(text_mes.text())), k1, k2)
+    redDct, greenDct, blueDct = ko.inject(redDct, greenDct, blueDct, code(text_mes.text()), k1, k2)
     ko.writeImage(Image.open(current_picture), redDct, greenDct, blueDct, fr"{pic_split[0]}-injected{pic_split[1]}", funcReverse)
 
 def extractMessage():
     redDct, greenDct, blueDct = ko.readImage(Image.open(fr"{current_picture}"), func)
+    s = size_mes.text()
     k1 = list(map(int, k1_mes.text().split()))
     k2 = list(map(int, k2_mes.text().split()))
-    print(ko.extract(redDct, greenDct, blueDct, k1, k2))
+    print("size", s)
+    bin = ko.extract(redDct, greenDct, blueDct, k1, k2, int(s)*4)
+    print(bin)
+    print(decode(bin))
 
 
 
 current_picture = ""
-func = ko.dctMul
-funcReverse = ko.dctMulReverse
-# func = ko.hadMul
-# funcReverse = ko.hadMulReverse
+# func = ko.dctMul
+# funcReverse = ko.dctMulReverse
+func = ko.hadMul
+funcReverse = ko.hadMulReverse
 app = QApplication([])
 win = QWidget()
 win.resize(1920, 1000)
@@ -109,7 +114,7 @@ lb_image.setMinimumSize(500,500)
 #lb_image.setFixedSize(lb_image.width()*70, lb_image.height()*70)
 lb_mes = QLabel("Сообщение")
 text_mes = QLineEdit()
-text_mes.setPlaceholderText("Введите двоичную строку")
+text_mes.setPlaceholderText("Введите сообщение")
 lb_full = QLabel("Заполненный контейнер")
 btn_con = QPushButton("Контейнер")
 btn_inject = QPushButton("Вставить сообщение")

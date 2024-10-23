@@ -3,7 +3,7 @@ from scipy.linalg import hadamard
 import koch
 import numpy as np
 import time
-from progress.bar import IncrementalBar
+# from progress.bar import IncrementalBar
 # Создаем матрицу Адамара
 size = 8
 hadamard_matrix = hadamard(size)
@@ -21,12 +21,14 @@ def hadMulReverse(mat):
     mat1 = np.matmul(hadamard_matrix, mat)
     return (np.matmul(mat1, np.transpose(hadamard_matrix))).astype(int)
 
-matrix = np.random.randint(0, 256, size=(size, size))
-dct = dctMul(matrix)
-had = hadMul(dct)
-formatted_matrix = [[f"{num:.2f}" for num in row] for row in had]
-for row in formatted_matrix:
-    print(row)
+
+print(f'{31:05b}')
+# matrix = np.random.randint(0, 256, size=(size, size))
+# dct = dctMul(matrix)
+# had = hadMul(dct)
+# formatted_matrix = [[f"{num:.2f}" for num in row] for row in had]
+# for row in formatted_matrix:
+#     print(row)
 
 # start = time.time()
 # hadMulReverse(hadMul(matrix))
