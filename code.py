@@ -1,4 +1,4 @@
-symbols = list(' abcdefghijklmnopqrstuvwxyz.,()')
+symbols = list(' abcdefghijklmnopqrstuvwxyz.,()-')
 symbol_dict = {symbol: i for i, symbol in enumerate(symbols)}
 inverted_dict = {v: k for k, v in symbol_dict.items()}
 def code(mes):
@@ -14,6 +14,3 @@ def decode(bin_str):
         mes += inverted_dict[int(bin_str[i:i+5],2)]
         i+=5
     return mes
-# b = code("Hello, world")
-# print(len(b))
-# print(decode(b))

@@ -1,38 +1,24 @@
 from PIL import Image, ImageDraw
 import numpy as np
-from decimal import Decimal
 from scipy.linalg import hadamard
-eps = 5  # сила встраивания
-# координаты внутри блоков, соответствующие средней частотной полосе
+eps = 5
 coefs = [[0, 6], [0, 7], [1, 6], [1, 7], [2, 4], [2, 5], [3, 4], [3, 5], [4, 2], [4, 3], [5, 2], [5, 3], [6, 0], [6, 1],
          [7, 0], [7, 1]]
-redDct = []
-redDctOg = []
-greenDct = []
-blueDct = []
 hadamard_matrix = hadamard(8)
 
-# проверка матрицы одного цвета на возможность встраивания бита 1
 def checkColor1(mat, k1, k2):
-    # print(mat[k1[0]][k1[1]], mat[k2[0]][k2[1]])
     return abs(mat[k1[0]][k1[1]]) - abs(mat[k2[0]][k2[1]]) <= eps
 
-
-# проверка матрицы одного цвета на возможность встраивания бита 0
 def checkColor0(mat, k1, k2):
     return (abs(mat[k2[0]][k2[1]]) - abs(mat[k1[0]][k1[1]])) <= eps
-
 
 def checkAll0(redDct, greenDct, blueDct, k1, k2):
     return not (checkColor0(redDct, k1, k2) and checkColor0(greenDct, k1, k2) and checkColor0(blueDct, k1, k2))
 
-
 def checkAll1(redDct, greenDct, blueDct, k1, k2):
     return not (checkColor1(redDct, k1, k2) and checkColor1(greenDct, k1, k2) and checkColor1(blueDct, k1, k2))
 
-
-# проход по матрицам частотных коэффициентов
-def getKs():
+def getKs(redDct, greenDct, blueDct):
     countMax = 0
     maxk1 = 0
     maxk2 = 0
@@ -42,21 +28,17 @@ def getKs():
             flag = True
             if i != j:
                 for k in range(len(redDct)):
-                    if k % 4 == 0:
+                    if k % 1 == 0:
                         if checkAll0(redDct[k], greenDct[k], blueDct[k], coefs[i], coefs[j]) \
                                 and checkAll1(redDct[k], greenDct[k], blueDct[k], coefs[i], coefs[j]):
                             flag = False
                         else:
                             countSuccess += 1
-                # if flag:
-                #    return coefs[i], coefs[j]
-            # print(countSuccess)
             if countSuccess > countMax:
                 maxk1 = coefs[i]
                 maxk2 = coefs[j]
                 countMax = countSuccess
     return countMax, maxk1, maxk2
-
 
 def inject(redDct, greenDct, blueDct, mes, k1, k2):
     i = 0
@@ -73,34 +55,33 @@ def inject(redDct, greenDct, blueDct, mes, k1, k2):
     return redDct, greenDct, blueDct
 
 def injectMat1(matOrig, k1, k2):
-    # print(matOrig)
     mat = matOrig.copy()
     if mat[k1[0]][k1[1]] >= 0:
         mat[k1[0]][k1[1]] = abs(mat[k2[0]][k2[1]]) + eps
     else:
         mat[k1[0]][k1[1]] = -abs(mat[k2[0]][k2[1]]) - eps
-    # print(mat)
     return mat
 
 def injectMat0(matOrig, k1, k2):
-    # print(matOrig)
     mat = matOrig.copy()
     if mat[k2[0]][k2[1]] >= 0:
         mat[k2[0]][k2[1]] = abs(mat[k1[0]][k1[1]]) + eps
     else:
         mat[k2[0]][k2[1]] = -abs(mat[k1[0]][k1[1]]) - eps
-    # print(mat)
     return mat
 
 def extract(redDct, greenDct, blueDct, k1, k2, l):
     mes = ""
     for k in range(l):
         if k%4==0:
-            if abs(redDct[k][k1[0]][k1[1]]) > abs(redDct[k][k2[0]][k2[1]]):
+            c_bit = 0
+            if abs(redDct[k][k1[0]][k1[1]]) > abs(redDct[k][k2[0]][k2[1]]): c_bit+=1
+            if abs(greenDct[k][k1[0]][k1[1]]) > abs(greenDct[k][k2[0]][k2[1]]): c_bit += 1
+            if abs(blueDct[k][k1[0]][k1[1]]) > abs(blueDct[k][k2[0]][k2[1]]): c_bit += 1
+            if c_bit>=2:
                 mes += '1'
             else:
                 mes += '0'
-
     return mes
 
 
@@ -115,10 +96,7 @@ def dctCreate():
                 dctMat[i].append(np.sqrt((1 / 4)) * np.cos(((2 * j + 1) * i * np.pi) / (16)))
     return np.array(dctMat)
 
-
 dct = dctCreate()
-
-
 def dctMul(mat):
     mat1 = np.matmul(np.transpose(dct), mat)
     return np.matmul(mat1, dct)
@@ -127,17 +105,18 @@ def dctMulReverse(mat):
     return np.matmul(mat1, np.transpose(dct)).astype(int)
 def hadMul(mat):
     mat1 = np.matmul(np.transpose(hadamard_matrix), mat)
-    return (np.matmul(mat1, hadamard_matrix))
+    return np.matmul(mat1, hadamard_matrix)//8
 def hadMulReverse(mat):
     mat1 = np.matmul(hadamard_matrix, mat)
-    return (np.matmul(mat1, np.transpose(hadamard_matrix))/64).astype(int)
+    return np.matmul(mat1, np.transpose(hadamard_matrix))//8
 
-def readImage(img, func=dctMul):
+def readImage(img, func):
+    redDct = []
+    greenDct = []
+    blueDct = []
     counter = 0
-    wc, hc = img.size  # получение размеров путсого контейнер
+    wc, hc = img.size
     pix = img.load()
-    new = Image.new("RGB", (wc, hc))
-    draw = ImageDraw.Draw(new)
     i, j, ic, jc = 0, 0, 0, 0
     while ic + 8 <= wc:
         while jc + 8 <= hc:
@@ -160,19 +139,16 @@ def readImage(img, func=dctMul):
             matg = np.array(mat1g)
             matb = np.array(mat1b)
             if counter < 8:
-                redDctOg.append(matr)
                 redDct.append(func(matr))
                 greenDct.append(func(matg))
                 blueDct.append(func(matb))
-                #counter += 1
             jc += 8
         jc = 0
         ic += 8
     return redDct, greenDct, blueDct
 
-def writeImage(img, redDct, greenDct, blueDct, newFile, func = dctMulReverse):
-    wc, hc = img.size  # получение размеров путсого контейнер
-    pix = img.load()
+def writeImage(img, redDct, greenDct, blueDct, newFile, func):
+    wc, hc = img.size
     new = Image.new("RGB", (wc, hc))
     draw = ImageDraw.Draw(new)
     i, j, ic, jc = 0, 0, 0, 0
@@ -193,46 +169,3 @@ def writeImage(img, redDct, greenDct, blueDct, newFile, func = dctMulReverse):
         jc = 0
         ic += 8
     new.save(newFile)
-# print(len(redDct))
-# redDct, greenDct, blueDct = readImage(Image.open(r".\Pictures\Girl.bmp"))
-# print(len(redDct))
-# print(len(greenDct))
-# print(len(blueDct))
-# result, k1, k2 = getKs()
-# print(result, k1, k2)
-# redDct, greenDct, blueDct = inject(redDct, greenDct, blueDct, watermark, k1, k2)
-# writeImage(Image.open(r".\Pictures\Girl.bmp"), redDct, greenDct, blueDct)
-#
-# redDct, greenDct, blueDct = readImage(Image.open(r".\Pictures\Girl-new.bmp"))
-# print(extract(redDct, greenDct, blueDct, k1, k2))
-''''
-inject0(k1, k2)
-redDctRev = dctMulReverse(redDct[0])
-getRedBit = dctMul(redDctRev)
-print(abs(getRedBit[k1[0]][k1[1]]) > abs(getRedBit[k2[0]][k2[1]]))
-inject1(k1, k2)
-redDctRev = dctMulReverse(redDct[1])
-print(redDctOg[1])
-print(redDctRev)
-getRedBit = dctMul(redDctRev)
-print(abs(getRedBit[k1[0]][k1[1]]) > abs(getRedBit[k2[0]][k2[1]]))
-'''
-'''
-
-result, k1, k2 = getKs1()
-print(result, k1, k2)
-'''
-'''''
-
-'''
-'''
-
-#print(mat1-redDct[0])
-#print(redDctOg[0])
-
-#print(redDctRev[k1[0]][k1[1]])
-
-#print(getRedBit)
-#print(abs(getRedBit[k1[0]][k1[1]]), abs(getRedBit[k2[0]][k2[1]]))
-#
-'''
