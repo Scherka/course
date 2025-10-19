@@ -71,7 +71,7 @@ def injectMessage():
     ko.blueDct = []
     redDct, greenDct, blueDct = ko.readImage(Image.open(current_picture), func)
     result, k1, k2 = ko.getKs(redDct, greenDct, blueDct)
-    print(len(code(text_mes.text())), k1, k2)
+    print(len(code(text_mes.text())), k1[0], k1[1], k2[0], k2[1])
     redDctRev, greenDctRev, blueDctRev = ko.inject(redDct, greenDct, blueDct, code(text_mes.text()), k1, k2)
     ko.writeImage(Image.open(current_picture), redDctRev, greenDctRev, blueDctRev, fr"{pic_split[0]}-injected{pic_split[1]}", funcReverse)
 
@@ -81,7 +81,6 @@ def extractMessage():
     k1 = list(map(int, k1_mes.text().split()))
     k2 = list(map(int, k2_mes.text().split()))
     bin = ko.extract(redDct, greenDct, blueDct, k1, k2, int(s)*4)
-    print(bin)
     print(decode(bin))
 
 current_picture = ""
@@ -92,13 +91,13 @@ win = QWidget()
 win.resize(1920, 1000)
 win.setWindowTitle('Стеганограф')
 map_image = QLabel("Карта")
-lb_image = QLabel("Картинка")
+lb_image = QLabel()
 lb_image.setMinimumSize(700,700)
 lb_mes = QLabel("Сообщение")
 text_mes = QLineEdit()
 text_mes.setPlaceholderText("Введите сообщение")
 lb_full = QLabel("Заполненный контейнер")
-btn_con = QPushButton("Контейнер")
+btn_con = QPushButton("Выбрать изображение")
 pic_name = QLabel("Текущее изображение: ")
 btn_inject = QPushButton("Вставить сообщение")
 btn_inject.setEnabled(False)
