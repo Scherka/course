@@ -21,6 +21,8 @@ def showImage(path, wid):
     wid.show()
 
 def chooseCon():
+    disableInject()
+    disableExtract()
     global current_picture
     global pic_split
     pic_split = []
@@ -65,23 +67,31 @@ def disableExtract():
     btn_extract.setEnabled(False)
 
 def injectMessage():
-    ko.redDct = []
-    ko.redDctOg = []
-    ko.greenDct = []
-    ko.blueDct = []
-    redDct, greenDct, blueDct = ko.readImage(Image.open(current_picture), func)
+    global img
+    img = Image.open(current_picture)
+    redDct, greenDct, blueDct = ko.readImage(img, func)
     result, k1, k2 = ko.getKs(redDct, greenDct, blueDct)
     print(len(code(text_mes.text())), k1[0], k1[1], k2[0], k2[1])
-    redDctRev, greenDctRev, blueDctRev = ko.inject(redDct, greenDct, blueDct, code(text_mes.text()), k1, k2)
-    ko.writeImage(Image.open(current_picture), redDctRev, greenDctRev, blueDctRev, fr"{pic_split[0]}-injected{pic_split[1]}", funcReverse)
+    print(code(text_mes.text()))
+    imgInjected = ko.inject(img, redDct, greenDct, blueDct, code(text_mes.text()), k1, k2, func, funcReverse)
+    imgInjected.save( fr"{pic_split[0]}-injected{pic_split[1]}")
+    # ko.writeImage(img, redDctRev, greenDctRev, blueDctRev, fr"{pic_split[0]}-injected{pic_split[1]}", funcReverse)
 
 def extractMessage():
-    redDct, greenDct, blueDct = ko.readImage(Image.open(fr"{current_picture}"), func)
+    global img
+    global current_picture
+    img = Image.open(current_picture)
+
+    redDct, greenDct, blueDct = ko.readImage(img, func)
     s = size_mes.text()
     k1 = list(map(int, k1_mes.text().split()))
     k2 = list(map(int, k2_mes.text().split()))
-    bin = ko.extract(redDct, greenDct, blueDct, k1, k2, int(s)*4)
-    print(decode(bin))
+    bin = ko.extract(img, redDct, greenDct, blueDct, k1, k2, int(s), func)
+    if bin == None:
+        print('Не удалось изъять сообщение')
+    else:
+        print(bin)
+        print(decode(bin))
 
 current_picture = ""
 func = ko.hadMul
