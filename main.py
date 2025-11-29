@@ -1,5 +1,5 @@
 from PyQt5.QtWidgets import (
-QApplication, QWidget,
+QApplication, QComboBox, QWidget,
 QFileDialog,
 QLabel, QPushButton,
 QHBoxLayout, QVBoxLayout, QLineEdit
@@ -48,15 +48,43 @@ def checkMessage():
     line_text = text_mes.text()
     if line_text != "" and line_text.replace("0", "").replace("1", "") == "" and current_picture != "":
         btn_inject.setEnabled(True)
-
+    eps_value = eps_input.text().strip()
+    try:
+        eps_value = float(eps_value)
+        ko.eps = eps_value
+    except ValueError:
+        # не число
+        print('Используется eps по умолчанию')
+        return
+# def checkExtract():
+#     try:
+#         size_text = int(size_mes.text())
+#         k1 = list(map(int, k1_mes.text().split()))
+#         k2 = list(map(int, k2_mes.text().split()))
+#         if all(0 <= num <= 7 for num in k1) and all(0 <= num <= 7 for num in k2) and len(k1) == 2 and len(k2) == 2 \
+#                 and current_picture != "":
+#             btn_extract.setEnabled(True)
+#     except:
+#         pass
 def checkExtract():
     try:
-        size_text = int(size_mes.text())
-        k1 = list(map(int, k1_mes.text().split()))
-        k2 = list(map(int, k2_mes.text().split()))
-        if all(0 <= num <= 7 for num in k1) and all(0 <= num <= 7 for num in k2) and len(k1) == 2 and len(k2) == 2 \
-                and current_picture != "":
+        key = extract_key.text().strip()
+
+        if not key.isdigit() or len(key) < 4 or current_picture == "":
+            return
+
+        # первые 2 цифры
+        k1 = list(map(int, key[:2]))
+        # вторые 2 цифры
+        k2 = list(map(int, key[2:4]))
+        # оставшиеся цифры – размер
+        size_value = int(key[4:]) if len(key) > 4 else 0
+
+        if (all(0 <= v <= 7 for v in k1) and
+            all(0 <= v <= 7 for v in k2) and
+            size_value >= 0):
             btn_extract.setEnabled(True)
+
     except:
         pass
 
@@ -69,11 +97,12 @@ def disableExtract():
 def injectMessage():
     global img
     img = Image.open(current_picture)
-    redDct, greenDct, blueDct = ko.readImage(img, func)
+    redDct, greenDct, blueDct, alphaMat = ko.readImage(img, func)
     result, k1, k2 = ko.getKs(redDct, greenDct, blueDct)
-    print(len(code(text_mes.text())), k1[0], k1[1], k2[0], k2[1])
+    print(f'{k1[0]}{k1[1]}{k2[0]}{k2[1]}{len(code(text_mes.text()))}')
     print(code(text_mes.text()))
-    imgInjected = ko.inject(img, redDct, greenDct, blueDct, code(text_mes.text()), k1, k2, func, funcReverse)
+    injection_mode_text = 'lsb' if injection_mode.currentText() == "Встраивание по спирали" else 'linear'
+    imgInjected = ko.inject(img, redDct, greenDct, blueDct, alphaMat, code(text_mes.text()), k1, k2, func, funcReverse, injection_mode_text)
     imgInjected.save( fr"{pic_split[0]}-injected{pic_split[1]}")
     # ko.writeImage(img, redDctRev, greenDctRev, blueDctRev, fr"{pic_split[0]}-injected{pic_split[1]}", funcReverse)
 
@@ -82,16 +111,25 @@ def extractMessage():
     global current_picture
     img = Image.open(current_picture)
 
-    redDct, greenDct, blueDct = ko.readImage(img, func)
-    s = size_mes.text()
-    k1 = list(map(int, k1_mes.text().split()))
-    k2 = list(map(int, k2_mes.text().split()))
-    bin = ko.extract(img, redDct, greenDct, blueDct, k1, k2, int(s), func)
+    redDct, greenDct, blueDct, alphaMat = ko.readImage(img, func)
+    k1, k2, s = split_digits(extract_key.text())
+    print(k1, k2, s)
+    injection_mode_text = 'lsb' if extract_mode.currentText() == "Изъятие по спирали" else 'linear'
+    bin = ko.extract(img, redDct, greenDct, blueDct, k1, k2, int(s), func, injection_mode_text)
     if bin == None:
         print('Не удалось изъять сообщение')
     else:
         print(bin)
         print(decode(bin))
+def split_digits(s: str):
+    if not s.isdigit():
+        raise ValueError("В строке должны быть только цифры")
+
+    first = list(map(int, s[:2]))
+    second = list(map(int, s[2:4]))
+    rest = int(s[4:]) if len(s) > 4 else 0
+
+    return first, second, rest
 
 current_picture = ""
 func = ko.hadMul
@@ -106,6 +144,12 @@ lb_image.setMinimumSize(700,700)
 lb_mes = QLabel("Сообщение")
 text_mes = QLineEdit()
 text_mes.setPlaceholderText("Введите сообщение")
+eps_input = QLineEdit()
+eps_input.setPlaceholderText("Введите коэффициент встраивания")
+eps_input.setText('5')
+injection_mode = QComboBox()
+injection_mode.addItem("Встраивание по спирали")
+injection_mode.addItem("Встраивание с края")
 lb_full = QLabel("Заполненный контейнер")
 btn_con = QPushButton("Выбрать изображение")
 pic_name = QLabel("Текущее изображение: ")
@@ -115,12 +159,15 @@ btn_extract = QPushButton("Изъять сообщение")
 btn_extract.setEnabled(False)
 btn_check_mes = QPushButton("Проверить сообщение")
 btn_check_extract = QPushButton("Проверить параметры изъятия")
-size_mes = QLineEdit()
-size_mes.setPlaceholderText("Введите длину сообщения")
-k1_mes = QLineEdit()
-k1_mes.setPlaceholderText("Введите координаты первого коэффициента через пробел")
-k2_mes = QLineEdit()
-k2_mes.setPlaceholderText("Введите координаты второго коэффициента через пробел")
+extract_key = QLineEdit()
+extract_key.setPlaceholderText("Введите ключ для изъятия сообщения сообщения")
+extract_mode = QComboBox()
+extract_mode.addItem("Изъятие по спирали")
+extract_mode.addItem("Изъятие с края")
+# k1_mes = QLineEdit()
+# k1_mes.setPlaceholderText("Введите координаты первого коэффициента через пробел")
+# k2_mes = QLineEdit()
+# k2_mes.setPlaceholderText("Введите координаты второго коэффициента через пробел")
 
 col = QVBoxLayout()
 colRow1 = QVBoxLayout()
@@ -138,11 +185,14 @@ colRow1.addWidget(pic_name, alignment=Qt.AlignTop | Qt.AlignHCenter)
 row1.addLayout(colRow1)
 row2.addWidget(lb_image, alignment=Qt.AlignCenter)
 row3.addWidget(text_mes)
+row3.addWidget(eps_input)
+row3.addWidget(injection_mode)
 row3.addWidget(btn_check_mes)
 row4.addWidget(btn_inject)
-row5.addWidget(size_mes)
-row5.addWidget(k1_mes)
-row5.addWidget(k2_mes)
+row5.addWidget(extract_key)
+row5.addWidget(extract_mode)
+# row5.addWidget(k1_mes)
+# row5.addWidget(k2_mes)
 row5.addWidget(btn_check_extract)
 row6.addWidget(btn_extract)
 col.addLayout(row1)
@@ -161,8 +211,8 @@ text_mes.textChanged.connect(disableInject)
 btn_inject.clicked.connect(injectMessage)
 btn_extract.clicked.connect(extractMessage)
 
-size_mes.textChanged.connect(disableExtract)
-k1_mes.textChanged.connect(disableExtract)
-k2_mes.textChanged.connect(disableExtract)
+extract_key.textChanged.connect(disableExtract)
+# k1_mes.textChanged.connect(disableExtract)
+# k2_mes.textChanged.connect(disableExtract)
 win.show()
 app.exec()

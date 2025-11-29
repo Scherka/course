@@ -4,7 +4,7 @@ from scipy.linalg import hadamard
 eps = 50
 coefs = [[0, 6], [0, 7], [1, 6], [1, 7], [2, 4], [2, 5], [3, 4], [3, 5], [4, 2], [4, 3], [5, 2], [5, 3], [6, 0], [6, 1],
          [7, 0], [7, 1]]
-ls_bit = 5 # наименее значимый бит для маркировки центра
+ls_bit = 1 # наименее значимый бит для маркировки центра
 hadamard_matrix = hadamard(8)
 
 def checkColor1(mat, k1, k2):
@@ -41,11 +41,14 @@ def getKs(redDct, greenDct, blueDct):
                 countMax = countSuccess
     return countMax, maxk1, maxk2
 # замена блока пикселей изображения
-def replace_block(i_start, j_start, redMatrix, greenMatrix, blueMatrix, pixels):
+def replace_block(i_start, j_start, redMatrix, greenMatrix, blueMatrix, alphaMat, pixels):
     block_size = 8
     for i in range(block_size):
         for j in range(block_size):
-            pixels[i_start + i, j_start + j] = (redMatrix[i, j], greenMatrix[i, j], blueMatrix[i, j])
+            if alphaMat[i, j] == None:
+                pixels[i_start + i, j_start + j] = (redMatrix[i, j], greenMatrix[i, j], blueMatrix[i, j])
+            else:
+                pixels[i_start + i, j_start + j] = (redMatrix[i, j], greenMatrix[i, j], blueMatrix[i, j], alphaMat[i, j])
     return pixels
 
 def mark_center(width, height, pixels): 
@@ -54,14 +57,20 @@ def mark_center(width, height, pixels):
     print('mark_center',width //2 - 4, height //2 - 4 ) # блок отсчёта 
     for i in range(width //2 - 4, width //2 + 4): 
         for j in range(height //2 - 4, height //2 + 4): 
-            r, g, b = pix[i, j] 
+            if len(pix[i, j]) == 3:
+                r, g, b = pix[i, j] 
+            elif len(pix[i, j]) == 4:
+                r, g, b, alpha = pix[i, j]
             r = r // val * val + val - 1
             g = g // val * val + val - 1
             b = b // val * val + val - 1
             # r = r // val * val 
             # g = g // val * val 
             # b = b // val * val
-            pixels[i, j] = (r, g, b) 
+            if len(pix[i, j]) == 3:
+                pixels[i, j] = (r, g, b) 
+            elif len(pix[i, j]) == 4:
+                pixels[i, j] = (r, g, b, alpha)
             # pixels[i, j] = (0, 0, 0) 
     return pixels
 def mark_center1(width, height, pixels, func, funcReverse):
@@ -124,8 +133,12 @@ def spiral_block_coords(wb, hb, start_r, start_c):
             dir_idx += 1
         step_len += 1
 
-
-def inject(img, redDct, greenDct, blueDct, mes, k1, k2, func, funcReverse):
+def linear_block_coords(wb, hb):
+    """Генерирует координаты блоков слева направо, сверху вниз."""
+    for r in range(hb):
+        for c in range(wb):
+            yield (r, c)
+def inject(img, redDct, greenDct, blueDct, alphaMat, mes, k1, k2, func, funcReverse, mode: str = 'lsb'):
     pix = img.load()
     wc, hc = img.size
     block_size = 8
@@ -148,8 +161,12 @@ def inject(img, redDct, greenDct, blueDct, mes, k1, k2, func, funcReverse):
 
     c = 0
     skip = 0 
+    if mode == 'lsb':
+        coords = spiral_block_coords(wb, hb, start_block_y, start_block_x)
+    else:
+        coords = linear_block_coords(wb, hb)
     # # заменяем исходный блок на ч/б# спиральный обход блоков (центр — точка отсчёта, но не используется)
-    for br, bc in spiral_block_coords(wb, hb, start_block_y, start_block_x):
+    for br, bc in coords:
         skip +=1
         if c >= len(mes):
             break
@@ -158,24 +175,31 @@ def inject(img, redDct, greenDct, blueDct, mes, k1, k2, func, funcReverse):
         # print(br, bc)
         ic = bc * block_size
         jc = br * block_size
-        mat1r, mat1g, mat1b = [], [], []
+        mat1r, mat1g, mat1b, mat1a = [], [], [], []
         for i in range(ic, ic + block_size):
-            mat2r, mat2g, mat2b = [], [], []
+            mat2r, mat2g, mat2b, mat2a = [], [], [], []
             for j in range(jc, jc + block_size):
-                c0, c1, c2 = pix[i, j]
+                if len(pix[i, j]) == 3:
+                    c0, c1, c2 = pix[i, j]
+                elif len(pix[i, j]) == 4:
+                    c0, c1, c2, alpha = pix[i, j]
                 mat2r.append(c0)
                 mat2g.append(c1)
                 mat2b.append(c2)
+                mat2a.append(alpha)
             mat1r.append(mat2r)
             mat1g.append(mat2g)
             mat1b.append(mat2b)
+            mat1a.append(mat2a)
         # создаём numpy-массивы каналов
         matr = np.array(mat1r, dtype=np.uint8)
         matg = np.array(mat1g, dtype=np.uint8)
         matb = np.array(mat1b, dtype=np.uint8)
+        mata = np.array(mat1a, dtype=np.uint8)
         redHad = func(matr)
         greenHad = func(matg)
         blueHad = func(matb)
+        alphaMat = mata
         if mes[c] == '0':
             redInjected = injectMat0(redHad, k1, k2)
             greenInjected = injectMat0(greenHad, k1, k2)
@@ -187,7 +211,7 @@ def inject(img, redDct, greenDct, blueDct, mes, k1, k2, func, funcReverse):
         redReverse = funcReverse(redInjected)
         greenReverse = funcReverse(greenInjected)
         blueReverse = funcReverse(blueInjected)
-        pix = replace_block(ic, jc, redReverse, greenReverse, blueReverse, pix)
+        pix = replace_block(ic, jc, redReverse, greenReverse, blueReverse, alphaMat, pix)
 
         c += 1
     print('save')
@@ -217,18 +241,25 @@ def check_center(width, height, pixels):
     red_block = []
     green_block = []
     blue_block = []
+    alpha_block = []
     for i in range(width, width + 8):
         red_row = []
         green_row = []
         blue_row = []
+        alpha_row = []
         for j in range(height, height + 8):
-            r, g, b = pixels[i, j]
+            if len(pixels[i, j]) == 3:
+                r, g, b = pixels[i, j]
+            elif len(pixels[i, j]) == 4:
+                r, g, b, alpha = pixels[i, j]
             red_row.append(bin(r))
             green_row.append(bin(g))
             blue_row.append(bin(b))
+            alpha_row.append(bin(alpha))
         red_block.append(red_row)
         green_block.append(green_row)
         blue_block.append(blue_row)
+        alpha_block.append(alpha_row)
     print('check center')
     print(red_block)
     print(green_block)
@@ -247,7 +278,10 @@ def find_reference_block(width, height, pixels):
                 greenr =[]
                 bluer = []
                 for x in range(8):
-                    r, g, b = pixels[j + x, i + y]
+                    if len(pixels[j + x, i + y]) == 3:
+                        r, g, b = pixels[j + x, i + y]
+                    elif len(pixels[j + x, i + y]) == 4:
+                        r, g, b, alpha = pixels[j + x, i + y]
                     redr.append(r), greenr.append(g), bluer.append(b)
                     if (r % val < t_hold) or (g % val < t_hold) or (b % val < t_hold):
                     # if (r % val > 0) or (g % val > 0) or (b % val > 0):
@@ -299,7 +333,7 @@ def find_reference_block1(width, height, pixels, func):
 
     return None, None
 
-def extract(img, redDct, greenDct, blueDct, k1, k2, l, func):
+def extract(img, redDct, greenDct, blueDct, k1, k2, l, func, mode: str = 'lsb'):
     wc, hc = img.size
     block_size = 8
     wb = wc // block_size
@@ -311,17 +345,23 @@ def extract(img, redDct, greenDct, blueDct, k1, k2, l, func):
     mes = ""
     c = 0
     skip = 0
+    
     check_center(start_x, start_y, pix)
     ref_x, ref_y = find_reference_block(wc, hc, pix)
     print('find_ref_block', ref_x, ref_y)
     if ref_x == None or ref_y == None:
-        print('Не удалось найти блок отсчёта')
-        return None
+        print('Не удалось найти блок отсчёта, используется значение по-умолчанию')
+        ref_x = start_x
+        ref_y = start_y
     # check_center(center_x, center_y, pix)
     # print(find_block_endswith1(wc, hc, pix), start_x, start_y)
 
     # # заменяем исходный блок на ч/б# спиральный обход блоков (центр — точка отсчёта, но не используется)
-    for br, bc in spiral_block_coords(wb, hb, ref_y // block_size, ref_x // block_size):
+    if mode == 'lsb':
+        coords = spiral_block_coords(wb, hb, ref_y // block_size, ref_x // block_size)
+    else:
+        coords = linear_block_coords(wb, hb)
+    for br, bc in coords:
         skip +=1
         if skip % 4 !=0:
             continue
@@ -335,7 +375,10 @@ def extract(img, redDct, greenDct, blueDct, k1, k2, l, func):
         for i in range(ic, ic + block_size):
             mat2r, mat2g, mat2b = [], [], []
             for j in range(jc, jc + block_size):
-                c0, c1, c2 = pix[i, j]
+                if len(pix[i, j]) == 3:
+                    c0, c1, c2 = pix[i, j]
+                elif len(pix[i, j]) == 4:
+                    c0, c1, c2, alpha = pix[i, j]
                 mat2r.append(c0)
                 mat2g.append(c1)
                 mat2b.append(c2)
@@ -358,16 +401,6 @@ def extract(img, redDct, greenDct, blueDct, k1, k2, l, func):
         else:
             mes += '0'
         c+=1
-    # for k in range(l):
-    #     if k%4==0:
-    #         c_bit = 0
-    #         if abs(redDct[k][k1[0]][k1[1]]) > abs(redDct[k][k2[0]][k2[1]]): c_bit+=1
-    #         if abs(greenDct[k][k1[0]][k1[1]]) > abs(greenDct[k][k2[0]][k2[1]]): c_bit += 1
-    #         if abs(blueDct[k][k1[0]][k1[1]]) > abs(blueDct[k][k2[0]][k2[1]]): c_bit += 1
-    #         if c_bit>=2:
-    #             mes += '1'
-    #         else:
-    #             mes += '0'
     return mes
 
 
@@ -400,41 +433,52 @@ def readImage(img, func):
     wc, hc = img.size
     global pix
     pix = img.load()
-    redDct, greenDct, blueDct = convertPixToDCT(pix, wc, hc, func)
+    redDct, greenDct, blueDct, alphaMat = convertPixToDCT(pix, wc, hc, func)
     print('dct', len(redDct), len(redDct[0]))
-    return redDct, greenDct, blueDct
+    return redDct, greenDct, blueDct, alphaMat
 def convertPixToDCT(pix, wc, hc, func):
     redDct = []
     greenDct = []
     blueDct = []
+    alphaMat = []
     i, j, ic, jc = 0, 0, 0, 0
     while ic + 8 <= wc:
         while jc + 8 <= hc:
             mat1r = []
             mat1g = []
             mat1b = []
+            mat1a = []
             for i in range(ic, ic + 8):
                 mat2r = []
                 mat2g = []
                 mat2b = []
+                mat2a = []
                 for j in range(jc, jc + 8):
-                    c0, c1, c2 = pix[i, j]  
+                    if len(pix[i, j]) == 3:
+                        c0, c1, c2 = pix[i, j] 
+                        alpha = None 
+                    elif len(pix[i, j]) == 4:
+                        c0, c1, c2, alpha = pix[i, j]
                     mat2r.append(c0)
                     mat2g.append(c1)
                     mat2b.append(c2)
+                    mat2a.append(alpha)
                 mat1r.append(mat2r)
                 mat1g.append(mat2g)
                 mat1b.append(mat2b)
+                mat1a.append(mat2a)
             matr = np.array(mat1r)
             matg = np.array(mat1g)
             matb = np.array(mat1b)
+            mata = np.array(mat1a)
             redDct.append(func(matr))
             greenDct.append(func(matg))
             blueDct.append(func(matb))
+            alphaMat.append(mata)
             jc += 8
         jc = 0
         ic += 8
-    return redDct, greenDct, blueDct
+    return redDct, greenDct, blueDct, alphaMat
 def writeImage(img, redDct, greenDct, blueDct, newFile, func):
     wc, hc = img.size
     new = Image.new("RGB", (wc, hc))
