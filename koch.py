@@ -2,6 +2,7 @@ from PIL import Image, ImageDraw
 import numpy as np
 from scipy.linalg import hadamard
 eps = 50
+dct_marker = 75
 coefs = [[0, 6], [0, 7], [1, 6], [1, 7], [2, 4], [2, 5], [3, 4], [3, 5], [4, 2], [4, 3], [5, 2], [5, 3], [6, 0], [6, 1],
          [7, 0], [7, 1]]
 ls_bit = 1 # наименее значимый бит для маркировки центра
@@ -77,34 +78,53 @@ def mark_center1(width, height, pixels, func, funcReverse):
     block_size = 8
     print('mark_center', width // 2 - 4, height // 2 - 4)
 
-    r_arr, g_arr, b_arr = [], [], []
+    r_arr, g_arr, b_arr, alpha_arr = [], [], [], []
 
     # collect modified values
     for i in range(width // 2 - 4, width // 2 + 4):
-        r_row, g_row, b_row = [], [], []
+        r_row, g_row, b_row, alpha_row = [], [], [], []
         for j in range(height // 2 - 4, height // 2 + 4):
-            r, g, b = pixels[i, j]
+            if len(pixels[i, j]) == 3:
+                r, g, b = pixels[i, j]
+                alpha = None
+            elif len(pixels[i, j]) == 4:
+                r, g, b, alpha = pixels[i, j]
             r_row.append(r)
             g_row.append(g)
             b_row.append(b)
+            alpha_row.append(alpha)
         r_arr.append(r_row)
         g_arr.append(g_row)
         b_arr.append(b_row)
-    r_arr_mul = func(r_arr)
-    g_arr_mul = func(g_arr)
-    b_arr_mul = func(b_arr)
-    for i in range(block_size):
-        for j in range(block_size):
-            r_arr_mul[i][j] = r_arr_mul[i][j] // 4 * 4 + 3
-            g_arr_mul[i][j] = g_arr_mul[i][j] // 4 * 4 + 3
-            b_arr_mul[i][j] = b_arr_mul[i][j] // 4 * 4 + 3
-    r_arr = funcReverse(r_arr_mul)
-    g_arr = funcReverse(g_arr_mul)
-    b_arr = funcReverse(b_arr_mul)
+        alpha_arr.append(alpha_row)
+    r_arr_mul = dctMul(r_arr)
+    g_arr_mul = dctMul(g_arr)
+    b_arr_mul = dctMul(b_arr)
+    
+    # print(r_arr_mul)
+    # print(g_arr_mul)
+    # print(b_arr_mul)
+    for matr in [r_arr_mul, g_arr_mul, b_arr_mul]:
+        print(format(matr[3][3], 'f'))
+        print(format(matr[3][4], 'f'))
+        print(format(matr[4][3], 'f'))
+        print(format(matr[4][4], 'f'))
+    for matr in [r_arr_mul, g_arr_mul, b_arr_mul]:
+        matr[3][3] = dct_marker
+        matr[3][4] = dct_marker
+        matr[4][3] = dct_marker
+        matr[4][4] = dct_marker
+   
+    r_arr = dctMulReverse(r_arr_mul)
+    g_arr = dctMulReverse(g_arr_mul)
+    b_arr = dctMulReverse(b_arr_mul)
     # reapply modified pixels
     for di, i in enumerate(range(width // 2 - 4, width // 2 + 4)):
         for dj, j in enumerate(range(height // 2 - 4, height // 2 + 4)):
-            pixels[i, j] = (r_arr[di][dj], g_arr[di][dj], b_arr[di][dj])
+            if len(pixels[i, j]) == 3:
+                pixels[i, j] = (r_arr[di][dj], g_arr[di][dj], b_arr[di][dj])
+            elif len(pixels[i, j]) == 4:
+                pixels[i, j] = (r_arr[di][dj], g_arr[di][dj], b_arr[di][dj], alpha_arr[di][dj])
 
     return pixels
 def spiral_block_coords(wb, hb, start_r, start_c):
@@ -155,8 +175,8 @@ def inject(img, redDct, greenDct, blueDct, alphaMat, mes, k1, k2, func, funcReve
     green_blocks = []
     blue_blocks = []
     # маркировка центра с помошью lsb
-    pix = mark_center(wc, hc, pix)
-    # pix = mark_center(wc, hc, pix, func, funcReverse)
+    # pix = mark_center(wc, hc, pix)
+    pix = mark_center1(wc, hc, pix, func, funcReverse)
 
 
     c = 0
@@ -181,6 +201,7 @@ def inject(img, redDct, greenDct, blueDct, alphaMat, mes, k1, k2, func, funcReve
             for j in range(jc, jc + block_size):
                 if len(pix[i, j]) == 3:
                     c0, c1, c2 = pix[i, j]
+                    alpha = None
                 elif len(pix[i, j]) == 4:
                     c0, c1, c2, alpha = pix[i, j]
                 mat2r.append(c0)
@@ -195,11 +216,14 @@ def inject(img, redDct, greenDct, blueDct, alphaMat, mes, k1, k2, func, funcReve
         matr = np.array(mat1r, dtype=np.uint8)
         matg = np.array(mat1g, dtype=np.uint8)
         matb = np.array(mat1b, dtype=np.uint8)
-        mata = np.array(mat1a, dtype=np.uint8)
+        try:
+            mata = np.array(mat1a, dtype=np.uint8)
+        except:
+            mata = np.array(mat1a)
         redHad = func(matr)
         greenHad = func(matg)
         blueHad = func(matb)
-        alphaMat = mata
+        alphaMat = mata 
         if mes[c] == '0':
             redInjected = injectMat0(redHad, k1, k2)
             greenInjected = injectMat0(greenHad, k1, k2)
@@ -233,7 +257,7 @@ def injectMat0(matOrig, k1, k2):
     else:
         mat[k2[0]][k2[1]] = -abs(mat[k1[0]][k1[1]]) - eps
     return mat
-def check_center(width, height, pixels):
+def check_center(width, height, pixels, func):
     block_size = 8
     val = 2 ** ls_bit
     # блок отсчёта
@@ -250,20 +274,26 @@ def check_center(width, height, pixels):
         for j in range(height, height + 8):
             if len(pixels[i, j]) == 3:
                 r, g, b = pixels[i, j]
+                alpha = None
             elif len(pixels[i, j]) == 4:
                 r, g, b, alpha = pixels[i, j]
-            red_row.append(bin(r))
-            green_row.append(bin(g))
-            blue_row.append(bin(b))
-            alpha_row.append(bin(alpha))
+            red_row.append(r)
+            green_row.append(g)
+            blue_row.append(b)
+            alpha_row.append(alpha)
         red_block.append(red_row)
         green_block.append(green_row)
         blue_block.append(blue_row)
         alpha_block.append(alpha_row)
     print('check center')
-    print(red_block)
-    print(green_block)
-    print(blue_block)
+    # print(dctMul(red_block))
+    # print(dctMul(green_block))
+    # print(dctMul(blue_block))
+    for matr in [dctMul(red_block), dctMul(green_block), dctMul(blue_block)]:
+        print(format(matr[3][3], 'f'))
+        print(format(matr[3][4], 'f'))
+        print(format(matr[4][3], 'f'))
+        print(format(matr[4][4], 'f'))
 def find_reference_block(width, height, pixels):
     val = 2 ** ls_bit
     t_hold = 2 ** (ls_bit-1)
@@ -296,6 +326,51 @@ def find_reference_block(width, height, pixels):
                 print(bluem)
                 return (j, i)  # top-left corner of found 8×8 block
     return None, None  # not found
+def find_reference_block_dct(width, height, pixels):
+    best_score = float("inf")
+    best_coords = (None, None)
+
+    for i in range(height - 7):
+        for j in range(width - 7):
+
+            # 3 отдельных блокa под R,G,B
+            block_r = np.zeros((8, 8), dtype=float)
+            block_g = np.zeros((8, 8), dtype=float)
+            block_b = np.zeros((8, 8), dtype=float)
+
+            # Заполняем блоки
+            for y in range(8):
+                for x in range(8):
+                    px = pixels[j + x, i + y]
+                    if len(px) == 3:
+                        r, g, b = px
+                    else:
+                        r, g, b, _ = px
+
+                    block_r[y, x] = r
+                    block_g[y, x] = g
+                    block_b[y, x] = b
+
+            # DCT отдельно для каждого канала
+            dct_r = dctMul(block_r)
+            dct_g = dctMul(block_g)
+            dct_b = dctMul(block_b)
+
+            coords = [(3,3), (3,4), (4,3), (4,4)]
+
+            # Суммируем отклонения по всем 3 каналам отдельно
+            score = 0.0
+
+            for cy, cx in coords:
+                score += (dct_r[cy][cx] - dct_marker)**2
+                score += (dct_g[cy][cx] - dct_marker)**2
+                score += (dct_b[cy][cx] - dct_marker)**2
+
+            if score < best_score:
+                best_score = score
+                best_coords = (j, i)
+
+    return best_coords
 def find_reference_block1(width, height, pixels, func):
     block_size = 8
     for i in range(0, height - block_size + 1):
@@ -346,8 +421,8 @@ def extract(img, redDct, greenDct, blueDct, k1, k2, l, func, mode: str = 'lsb'):
     c = 0
     skip = 0
     
-    check_center(start_x, start_y, pix)
-    ref_x, ref_y = find_reference_block(wc, hc, pix)
+    check_center(start_x, start_y, pix, func)
+    ref_x, ref_y = find_reference_block_dct(wc, hc, pix)
     print('find_ref_block', ref_x, ref_y)
     if ref_x == None or ref_y == None:
         print('Не удалось найти блок отсчёта, используется значение по-умолчанию')
