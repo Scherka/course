@@ -1,7 +1,7 @@
 from PIL import Image, ImageDraw
 import numpy as np
 from scipy.linalg import hadamard
-eps = 50
+eps = 5
 dct_marker = 75
 coefs = [[0, 6], [0, 7], [1, 6], [1, 7], [2, 4], [2, 5], [3, 4], [3, 5], [4, 2], [4, 3], [5, 2], [5, 3], [6, 0], [6, 1],
          [7, 0], [7, 1]]
@@ -104,11 +104,11 @@ def mark_center1(width, height, pixels, func, funcReverse):
     # print(r_arr_mul)
     # print(g_arr_mul)
     # print(b_arr_mul)
-    for matr in [r_arr_mul, g_arr_mul, b_arr_mul]:
-        print(format(matr[3][3], 'f'))
-        print(format(matr[3][4], 'f'))
-        print(format(matr[4][3], 'f'))
-        print(format(matr[4][4], 'f'))
+    # for matr in [r_arr_mul, g_arr_mul, b_arr_mul]:
+    #     print(format(matr[3][3], 'f'))
+    #     print(format(matr[3][4], 'f'))
+    #     print(format(matr[4][3], 'f'))
+    #     print(format(matr[4][4], 'f'))
     for matr in [r_arr_mul, g_arr_mul, b_arr_mul]:
         matr[3][3] = dct_marker
         matr[3][4] = dct_marker
@@ -261,7 +261,7 @@ def check_center(width, height, pixels, func):
     block_size = 8
     val = 2 ** ls_bit
     # блок отсчёта
-    print('check_center',width, height)
+    # print('check_center',width, height)
     red_block = []
     green_block = []
     blue_block = []
@@ -285,15 +285,15 @@ def check_center(width, height, pixels, func):
         green_block.append(green_row)
         blue_block.append(blue_row)
         alpha_block.append(alpha_row)
-    print('check center')
+    # print('check center')
     # print(dctMul(red_block))
     # print(dctMul(green_block))
     # print(dctMul(blue_block))
-    for matr in [dctMul(red_block), dctMul(green_block), dctMul(blue_block)]:
-        print(format(matr[3][3], 'f'))
-        print(format(matr[3][4], 'f'))
-        print(format(matr[4][3], 'f'))
-        print(format(matr[4][4], 'f'))
+    # for matr in [dctMul(red_block), dctMul(green_block), dctMul(blue_block)]:
+    #     print(format(matr[3][3], 'f'))
+    #     print(format(matr[3][4], 'f'))
+    #     print(format(matr[4][3], 'f'))
+    #     print(format(matr[4][4], 'f'))
 def find_reference_block(width, height, pixels):
     val = 2 ** ls_bit
     t_hold = 2 ** (ls_bit-1)
@@ -418,6 +418,9 @@ def extract(img, redDct, greenDct, blueDct, k1, k2, l, func, mode: str = 'lsb'):
     start_block_x = start_x // block_size
     start_block_y = start_y // block_size
     mes = ""
+    red_mes = ''
+    green_mes = ''
+    blue_mes = ''
     c = 0
     skip = 0
     
@@ -468,14 +471,30 @@ def extract(img, redDct, greenDct, blueDct, k1, k2, l, func, mode: str = 'lsb'):
         greenHad = func(matg)
         blueHad = func(matb)
         c_bit = 0
-        if abs(redHad[k1[0]][k1[1]]) > abs(redHad[k2[0]][k2[1]]): c_bit+=1
-        if abs(greenHad[k1[0]][k1[1]]) > abs(greenHad[k2[0]][k2[1]]): c_bit += 1
-        if abs(blueHad[k1[0]][k1[1]]) > abs(blueHad[k2[0]][k2[1]]): c_bit += 1
+        
+        if abs(redHad[k1[0]][k1[1]]) > abs(redHad[k2[0]][k2[1]]): 
+            red_mes += '1'
+            c_bit+=1
+        else:
+            red_mes += '0'
+        if abs(greenHad[k1[0]][k1[1]]) > abs(greenHad[k2[0]][k2[1]]): 
+            green_mes += '1'
+            c_bit += 1
+        else:
+            green_mes += '0'
+        if abs(blueHad[k1[0]][k1[1]]) > abs(blueHad[k2[0]][k2[1]]): 
+            blue_mes += '1'
+            c_bit += 1
+        else:
+            blue_mes += '0'
         if c_bit>=2:
             mes += '1'
         else:
             mes += '0'
         c+=1
+    print('red_mes', red_mes)
+    print('green_m', green_mes)
+    print('blue_me', blue_mes)
     return mes
 
 
