@@ -1,5 +1,5 @@
 from PyQt5.QtWidgets import (
-QApplication, QComboBox, QWidget,
+QApplication, QComboBox, QDialog, QWidget,
 QFileDialog,
 QLabel, QPushButton,
 QHBoxLayout, QVBoxLayout, QLineEdit
@@ -99,7 +99,9 @@ def injectMessage():
     img = Image.open(current_picture)
     redDct, greenDct, blueDct, alphaMat = ko.readImage(img, func)
     result, k1, k2 = ko.getKs(redDct, greenDct, blueDct)
-    print(f'{k1[0]}{k1[1]}{k2[0]}{k2[1]}{len(code(text_mes.text()))}')
+    key = f'{k1[0]}{k1[1]}{k2[0]}{k2[1]}{len(code(text_mes.text()))}'
+    show_message_window("Ключ", key)
+    print(key)
     print(code(text_mes.text()))
     injection_mode_text = 'lsb' if injection_mode.currentText() == "Встраивание по спирали" else 'linear'
     imgInjected = ko.inject(img, redDct, greenDct, blueDct, alphaMat, code(text_mes.text()), k1, k2, func, funcReverse, injection_mode_text)
@@ -121,6 +123,7 @@ def extractMessage():
     else:
         print(bin)
         print(decode(bin))
+        show_message_window("Изъятое сообщение", decode(bin))
 def split_digits(s: str):
     if not s.isdigit():
         raise ValueError("В строке должны быть только цифры")
@@ -131,6 +134,27 @@ def split_digits(s: str):
 
     return first, second, rest
 
+def show_message_window(title: str, text: str):
+    # статический список внутри функции — окно не удалится GC
+    if not hasattr(show_message_window, "_windows"):
+        show_message_window._windows = []
+
+    dlg = QDialog()
+    dlg.setWindowTitle(title)
+    dlg.setWindowFlags(Qt.Tool | Qt.WindowStaysOnTopHint)  # уведомление поверх
+    dlg.setAttribute(Qt.WA_DeleteOnClose, False)            # не удалять объект
+    dlg.setMinimumSize(200, 50)
+
+    layout = QVBoxLayout(dlg)
+    label = QLabel(text)
+    label.setWordWrap(True)
+    label.setTextInteractionFlags(Qt.TextSelectableByMouse)
+    layout.addWidget(label)
+
+    dlg.show()
+
+    show_message_window._windows.append(dlg)  # сохраняем для предотвращения исчезновения
+    return dlg
 current_picture = ""
 func = ko.hadMul
 funcReverse = ko.hadMulReverse
