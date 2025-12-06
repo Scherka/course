@@ -44,7 +44,6 @@ def chooseCon():
         result, k1_, k2_ = ko.getKs(redDct, greenDct, blueDct)
         k1 = k1_
         k2 = k2_
-        # max_mes_len.setText(f"Максимальная длина сообщения в битах: {result}")
         pic_name.setText(
             f"Текущее изображение: {current_picture}\n"
             f"Максимальная длина сообщения в битах: {result}"
@@ -70,19 +69,9 @@ def checkMessage():
         eps_value = float(eps_value)
         ko.eps = eps_value
     except ValueError:
-        # не число
         print('Используется eps по умолчанию')
         return
-# def checkExtract():
-#     try:
-#         size_text = int(size_mes.text())
-#         k1 = list(map(int, k1_mes.text().split()))
-#         k2 = list(map(int, k2_mes.text().split()))
-#         if all(0 <= num <= 7 for num in k1) and all(0 <= num <= 7 for num in k2) and len(k1) == 2 and len(k2) == 2 \
-#                 and current_picture != "":
-#             btn_extract.setEnabled(True)
-#     except:
-#         pass
+
 def checkExtract():
     try:
         key = extract_key.text().strip()
@@ -90,11 +79,8 @@ def checkExtract():
         if not key.isdigit() or len(key) < 4 or current_picture == "":
             return
 
-        # первые 2 цифры
-        k1 = list(map(int, key[:2]))
-        # вторые 2 цифры
+        k1 = list[int](map(int, key[:2]))
         k2 = list(map(int, key[2:4]))
-        # оставшиеся цифры – размер
         size_value = int(key[4:]) if len(key) > 4 else 0
 
         if (all(0 <= v <= 7 for v in k1) and
@@ -112,30 +98,23 @@ def disableExtract():
     btn_extract.setEnabled(False)
 
 def injectMessage():
-    # global img
-    # img = Image.open(current_picture)
-    # redDct, greenDct, blueDct, alphaMat = ko.readImage(img, func)
     result, k1, k2 = ko.getKs(redDct, greenDct, blueDct)
     key = f'{k1[0]}{k1[1]}{k2[0]}{k2[1]}{len(code(text_mes.text()))}'
     show_message_window("Ключ", key)
     print(key)
     print(code(text_mes.text()))
     injection_mode_text = 'lsb' if injection_mode.currentText() == "Встраивание по спирали" else 'linear'
-    # injection_mode_text = 'linear'
     imgInjected = ko.inject(img, redDct, greenDct, blueDct, alphaMat, code(text_mes.text()), k1, k2, func, funcReverse, injection_mode_text)
     imgInjected.save( fr"{pic_split[0]}-injected_{ko.eps}{pic_split[1]}")
-    # ko.writeImage(img, redDctRev, greenDctRev, blueDctRev, fr"{pic_split[0]}-injected{pic_split[1]}", funcReverse)
 
 def extractMessage():
     global img
     global current_picture
     img = Image.open(current_picture)
-
     redDct, greenDct, blueDct, alphaMat = ko.readImage(img, func)
     k1, k2, s = split_digits(extract_key.text())
     print(k1, k2, s)
     injection_mode_text = 'lsb' if extract_mode.currentText() == "Изъятие по спирали" else 'linear'
-    # injection_mode_text = 'linear'
     bin = ko.extract(img, redDct, greenDct, blueDct, k1, k2, int(s), func, injection_mode_text)
     if bin == None:
         print('Не удалось изъять сообщение')
@@ -155,14 +134,13 @@ def split_digits(s: str):
     return first, second, rest
 
 def show_message_window(title: str, text: str):
-    # статический список внутри функции — окно не удалится GC
     if not hasattr(show_message_window, "_windows"):
         show_message_window._windows = []
 
     dlg = QDialog()
     dlg.setWindowTitle(title)
-    dlg.setWindowFlags(Qt.Tool | Qt.WindowStaysOnTopHint)  # уведомление поверх
-    dlg.setAttribute(Qt.WA_DeleteOnClose, False)            # не удалять объект
+    dlg.setWindowFlags(Qt.Tool | Qt.WindowStaysOnTopHint) 
+    dlg.setAttribute(Qt.WA_DeleteOnClose, False)           
     dlg.setMinimumSize(200, 50)
 
     layout = QVBoxLayout(dlg)
@@ -173,7 +151,7 @@ def show_message_window(title: str, text: str):
 
     dlg.show()
 
-    show_message_window._windows.append(dlg)  # сохраняем для предотвращения исчезновения
+    show_message_window._windows.append(dlg) 
     return dlg
 current_picture = ""
 func = ko.hadMul
@@ -197,7 +175,6 @@ injection_mode.addItem("Встраивание с края")
 lb_full = QLabel("Заполненный контейнер")
 btn_con = QPushButton("Выбрать изображение")
 pic_name = QLabel("Текущее изображение: \nМаксимальная длина сообщения в битах: ")
-# max_mes_len = QLabel("Максимальная длина сообщения в битах: ")
 btn_inject = QPushButton("Вставить сообщение")
 btn_inject.setEnabled(False)
 btn_extract = QPushButton("Изъять сообщение")
@@ -209,11 +186,6 @@ extract_key.setPlaceholderText("Введите ключ для изъятия с
 extract_mode = QComboBox()
 extract_mode.addItem("Изъятие по спирали")
 extract_mode.addItem("Изъятие с края")
-# k1_mes = QLineEdit()
-# k1_mes.setPlaceholderText("Введите координаты первого коэффициента через пробел")
-# k2_mes = QLineEdit()
-# k2_mes.setPlaceholderText("Введите координаты второго коэффициента через пробел")
-
 col = QVBoxLayout()
 colRow1 = QVBoxLayout()
 row1 = QHBoxLayout()
@@ -222,12 +194,10 @@ row3 = QHBoxLayout()
 row4 = QHBoxLayout()
 row5 = QHBoxLayout()
 row6 = QHBoxLayout()
-
 colRow1.setSpacing(0)
 colRow1.setContentsMargins(0, 0, 0, 0)
 colRow1.addWidget(btn_con)
 colRow1.addWidget(pic_name, alignment=Qt.AlignTop | Qt.AlignHCenter)
-# colRow1.addWidget(max_mes_len, alignment=Qt.AlignTop | Qt.AlignHCenter)
 row1.addLayout(colRow1)
 row2.addWidget(lb_image, alignment=Qt.AlignCenter)
 row3.addWidget(text_mes)
@@ -237,8 +207,6 @@ row3.addWidget(btn_check_mes)
 row4.addWidget(btn_inject)
 row5.addWidget(extract_key)
 row5.addWidget(extract_mode)
-# row5.addWidget(k1_mes)
-# row5.addWidget(k2_mes)
 row5.addWidget(btn_check_extract)
 row6.addWidget(btn_extract)
 col.addLayout(row1)
@@ -259,7 +227,5 @@ btn_extract.clicked.connect(extractMessage)
 
 extract_key.textChanged.connect(disableExtract)
 eps_input.textChanged.connect(disableInject)
-# k1_mes.textChanged.connect(disableExtract)
-# k2_mes.textChanged.connect(disableExtract)
 win.show()
 app.exec()
