@@ -1,13 +1,42 @@
+import json
 from PIL import Image, ImageDraw
 import numpy as np
 from scipy.linalg import hadamard
 eps = 5
 dct_marker = 75
+
+# marker_check_coords = [[0,5], [5,0], [1,7], [7,1]]
+marker_check_coords = [[7,0], [6,1], [0,7], [1,6]]
 coefs = [[0, 6], [0, 7], [1, 6], [1, 7], [2, 4], [2, 5], [3, 4], [3, 5], [4, 2], [4, 3], [5, 2], [5, 3], [6, 0], [6, 1],
          [7, 0], [7, 1]]
 ls_bit = 1 # наименее значимый бит для маркировки центра
 hadamard_matrix = hadamard(8)
+def dctCreate():
+    dctMat = []
+    for i in range(8):
+        dctMat.append([])
+        for j in range(8):
+            if i == 0:
+                dctMat[i].append(np.sqrt((1 / 8)))
+            else:
+                dctMat[i].append(np.sqrt((1 / 4)) * np.cos(((2 * j + 1) * i * np.pi) / (16)))
+    return np.array(dctMat)
 
+dct = dctCreate()
+def dctMul(mat):
+    mat1 = np.matmul(np.transpose(dct), mat)
+    return np.matmul(mat1, dct)
+def dctMulReverse(mat):
+    mat1 = np.matmul(dct, mat)
+    return np.matmul(mat1, np.transpose(dct)).astype(int)
+def hadMul(mat):
+    mat1 = np.matmul(np.transpose(hadamard_matrix), mat)
+    return np.matmul(mat1, hadamard_matrix)//8
+def hadMulReverse(mat):
+    mat1 = np.matmul(hadamard_matrix, mat)
+    return np.matmul(mat1, np.transpose(hadamard_matrix))//8
+mark_func = hadMul  
+mark_func_reverse = hadMulReverse
 def checkColor1(mat, k1, k2):
     return abs(mat[k1[0]][k1[1]]) - abs(mat[k2[0]][k2[1]]) <= eps
 
@@ -76,6 +105,10 @@ def mark_center(width, height, pixels):
     return pixels
 def mark_center1(width, height, pixels, func, funcReverse):
     block_size = 8
+    func = dctMul
+    funcReverse = dctMulReverse
+    # func = hadMul
+    # funcReverse = hadMulReverse
     print('mark_center', width // 2 - 4, height // 2 - 4)
 
     r_arr, g_arr, b_arr, alpha_arr = [], [], [], []
@@ -97,11 +130,23 @@ def mark_center1(width, height, pixels, func, funcReverse):
         g_arr.append(g_row)
         b_arr.append(b_row)
         alpha_arr.append(alpha_row)
-    r_arr_mul = dctMul(r_arr)
-    g_arr_mul = dctMul(g_arr)
-    b_arr_mul = dctMul(b_arr)
-    
-    # print(r_arr_mul)
+    r_arr_mul = mark_func(r_arr)
+    g_arr_mul = mark_func(g_arr)
+    b_arr_mul = mark_func(b_arr)
+    # r_had_mul = hadMul(r_arr)
+    # g_had_mul = hadMul(g_arr)
+    # b_had_mul = hadMul(b_arr)
+    def row_to_line(row):
+        return "[" + ", ".join(str(round(x, 0)) for x in row) + "]"
+
+    data_json_ready = {
+        "r": [row_to_line(row) for row in r_arr_mul],
+        "g": [row_to_line(row) for row in g_arr_mul],
+        "b": [row_to_line(row) for row in b_arr_mul],
+    }
+
+    with open("mark_center_dct.json", "w", encoding="utf-8") as f:
+        json.dump(data_json_ready, f, ensure_ascii=False, indent=4)   # print(r_arr_mul)
     # print(g_arr_mul)
     # print(b_arr_mul)
     # for matr in [r_arr_mul, g_arr_mul, b_arr_mul]:
@@ -110,14 +155,12 @@ def mark_center1(width, height, pixels, func, funcReverse):
     #     print(format(matr[4][3], 'f'))
     #     print(format(matr[4][4], 'f'))
     for matr in [r_arr_mul, g_arr_mul, b_arr_mul]:
-        matr[3][3] = dct_marker
-        matr[3][4] = dct_marker
-        matr[4][3] = dct_marker
-        matr[4][4] = dct_marker
+        for coord in marker_check_coords:
+            matr[coord[0]][coord[1]] = dct_marker
    
-    r_arr = dctMulReverse(r_arr_mul)
-    g_arr = dctMulReverse(g_arr_mul)
-    b_arr = dctMulReverse(b_arr_mul)
+    r_arr = mark_func_reverse(r_arr_mul)
+    g_arr = mark_func_reverse(g_arr_mul)
+    b_arr = mark_func_reverse(b_arr_mul)
     # reapply modified pixels
     for di, i in enumerate(range(width // 2 - 4, width // 2 + 4)):
         for dj, j in enumerate(range(height // 2 - 4, height // 2 + 4)):
@@ -155,11 +198,14 @@ def spiral_block_coords(wb, hb, start_r, start_c):
 
 def linear_block_coords(wb, hb):
     """Генерирует координаты блоков слева направо, сверху вниз."""
-    for r in range(hb):
-        for c in range(wb):
+    for r in range(wb):
+        for c in range(hb):
             yield (r, c)
 def inject(img, redDct, greenDct, blueDct, alphaMat, mes, k1, k2, func, funcReverse, mode: str = 'lsb'):
     pix = img.load()
+    img_copy = img.copy()
+    pix_copy = img_copy.load()
+    black_block = np.zeros((8, 8)).astype(int)
     wc, hc = img.size
     block_size = 8
     wb = wc // block_size
@@ -176,13 +222,15 @@ def inject(img, redDct, greenDct, blueDct, alphaMat, mes, k1, k2, func, funcReve
     blue_blocks = []
     # маркировка центра с помошью lsb
     # pix = mark_center(wc, hc, pix)
-    pix = mark_center1(wc, hc, pix, func, funcReverse)
+
 
 
     c = 0
     skip = 0 
     if mode == 'lsb':
         coords = spiral_block_coords(wb, hb, start_block_y, start_block_x)
+        pix = mark_center1(wc, hc, pix, func, funcReverse)
+
     else:
         coords = linear_block_coords(wb, hb)
     # # заменяем исходный блок на ч/б# спиральный обход блоков (центр — точка отсчёта, но не используется)
@@ -236,11 +284,32 @@ def inject(img, redDct, greenDct, blueDct, alphaMat, mes, k1, k2, func, funcReve
         greenReverse = funcReverse(greenInjected)
         blueReverse = funcReverse(blueInjected)
         pix = replace_block(ic, jc, redReverse, greenReverse, blueReverse, alphaMat, pix)
-
+        pix_copy = replace_block(ic, jc, black_block, black_block, black_block, alphaMat, pix_copy)
+        red_blocks.append(redReverse)
+        green_blocks.append(greenReverse)
+        blue_blocks.append(blueReverse)
         c += 1
     print('save')
+    img_copy.save('inject_map.bmp')
+
+    # matrices_json_ready_r = [to_list2d(m) for m in red_blocks]
+    # matrices_json_ready_g = [to_list2d(m) for m in green_blocks]
+    # matrices_json_ready_b = [to_list2d(m) for m in blue_blocks]
+    # print(matrices_json_ready_r)
+    # with open("inject_matrices_r.json", "w", encoding="utf-8") as f:
+    #     json.dump(matrices_json_ready_r, f, ensure_ascii=False)
+    # with open("inject_matrices_g.json", "w", encoding="utf-8") as f:
+    #     json.dump(matrices_json_ready_g, f, ensure_ascii=False)
+    # with open("inject_matrices_b.json", "w", encoding="utf-8") as f:
+    #     json.dump(matrices_json_ready_b, f, ensure_ascii=False)
+    save_matrices_pretty(red_blocks, "inject_matrices_r.json")
+    save_matrices_pretty(green_blocks, "inject_matrices_g.json")
+    save_matrices_pretty(blue_blocks, "inject_matrices_b.json")
     # img.save('gray.bmp')
     return img
+
+def to_list2d(matrix):
+    return [[int(x) for x in row] for row in matrix]
 
 def injectMat1(matOrig, k1, k2):
     mat = matOrig.copy()
@@ -329,7 +398,11 @@ def find_reference_block(width, height, pixels):
 def find_reference_block_dct(width, height, pixels):
     best_score = float("inf")
     best_coords = (None, None)
-
+    best_block_r = None
+    best_block_g = None
+    best_block_b = None
+    func = dctMul
+    funcReverse = dctMulReverse
     for i in range(height - 7):
         for j in range(width - 7):
 
@@ -352,24 +425,37 @@ def find_reference_block_dct(width, height, pixels):
                     block_b[y, x] = b
 
             # DCT отдельно для каждого канала
-            dct_r = dctMul(block_r)
-            dct_g = dctMul(block_g)
-            dct_b = dctMul(block_b)
+            dct_r = mark_func(block_r)
+            dct_g = mark_func(block_g)
+            dct_b = mark_func(block_b)
 
-            coords = [(3,3), (3,4), (4,3), (4,4)]
 
             # Суммируем отклонения по всем 3 каналам отдельно
             score = 0.0
 
-            for cy, cx in coords:
-                score += (dct_r[cy][cx] - dct_marker)**2
-                score += (dct_g[cy][cx] - dct_marker)**2
-                score += (dct_b[cy][cx] - dct_marker)**2
+            for coord in marker_check_coords:
+                cy, cx = coord
+                score += abs(dct_r[cy][cx] - dct_marker)
+                score += abs(dct_g[cy][cx] - dct_marker)
+                score += abs(dct_b[cy][cx] - dct_marker)
 
             if score < best_score:
                 best_score = score
                 best_coords = (j, i)
+                best_block_r = dct_r
+                best_block_g = dct_g
+                best_block_b = dct_b
+    def row_to_line(row):
+        return "[" + ", ".join(str(round(x, 0)) for x in row) + "]"
 
+    data_json_ready = {
+        "r": [row_to_line(row) for row in best_block_r],
+        "g": [row_to_line(row) for row in best_block_g],
+        "b": [row_to_line(row) for row in best_block_b],
+    }
+
+    with open("ref_block_dct.json", "w", encoding="utf-8") as f:
+        json.dump(data_json_ready, f, ensure_ascii=False, indent=4)        
     return best_coords
 def find_reference_block1(width, height, pixels, func):
     block_size = 8
@@ -423,7 +509,9 @@ def extract(img, redDct, greenDct, blueDct, k1, k2, l, func, mode: str = 'lsb'):
     blue_mes = ''
     c = 0
     skip = 0
-    
+    red_blocks = []
+    green_blocks = []
+    blue_blocks = []
     check_center(start_x, start_y, pix, func)
     ref_x, ref_y = find_reference_block_dct(wc, hc, pix)
     print('find_ref_block', ref_x, ref_y)
@@ -492,36 +580,27 @@ def extract(img, redDct, greenDct, blueDct, k1, k2, l, func, mode: str = 'lsb'):
         else:
             mes += '0'
         c+=1
+        red_blocks.append(matr)
+        green_blocks.append(matg)
+        blue_blocks.append(matb)
+    # matrices_json_ready_r = [to_list2d(m) for m in red_blocks]
+    # matrices_json_ready_g = [to_list2d(m) for m in green_blocks]
+    # matrices_json_ready_b = [to_list2d(m) for m in blue_blocks]
+
+    # with open("extract_matrices_r.json", "w", encoding="utf-8") as f:
+    #     json.dump(matrices_json_ready_r, f, ensure_ascii=False)
+    # with open("extract_matrices_g.json", "w", encoding="utf-8") as f:
+    #     json.dump(matrices_json_ready_g, f, ensure_ascii=False)
+    # with open("extract_matrices_b.json", "w", encoding="utf-8") as f:
+    #     json.dump(matrices_json_ready_b, f, ensure_ascii=False)
+    save_matrices_pretty(red_blocks, "extract_matrices_r.json")
+    save_matrices_pretty(green_blocks, "extract_matrices_g.json")
+    save_matrices_pretty(blue_blocks, "extract_matrices_b.json")
     print('red_mes', red_mes)
     print('green_m', green_mes)
     print('blue_me', blue_mes)
     return mes
 
-
-def dctCreate():
-    dctMat = []
-    for i in range(8):
-        dctMat.append([])
-        for j in range(8):
-            if i == 0:
-                dctMat[i].append(np.sqrt((1 / 8)))
-            else:
-                dctMat[i].append(np.sqrt((1 / 4)) * np.cos(((2 * j + 1) * i * np.pi) / (16)))
-    return np.array(dctMat)
-
-dct = dctCreate()
-def dctMul(mat):
-    mat1 = np.matmul(np.transpose(dct), mat)
-    return np.matmul(mat1, dct)
-def dctMulReverse(mat):
-    mat1 = np.matmul(dct, mat)
-    return np.matmul(mat1, np.transpose(dct)).astype(int)
-def hadMul(mat):
-    mat1 = np.matmul(np.transpose(hadamard_matrix), mat)
-    return np.matmul(mat1, hadamard_matrix)//8
-def hadMulReverse(mat):
-    mat1 = np.matmul(hadamard_matrix, mat)
-    return np.matmul(mat1, np.transpose(hadamard_matrix))//8
 
 def readImage(img, func):
     wc, hc = img.size
@@ -595,3 +674,23 @@ def writeImage(img, redDct, greenDct, blueDct, newFile, func):
         jc = 0
         ic += 8
     new.save(newFile)
+
+def save_matrices_pretty(matrices, filename):
+    def to_list2d(matrix):
+        return [[float(x) for x in row] for row in matrix]
+
+    with open(filename, "w", encoding="utf-8") as f:
+        f.write("[\n")
+        for i, matrix in enumerate(matrices):
+            mat = to_list2d(matrix)
+            f.write("  [\n")
+            for j, row in enumerate(mat):
+                f.write("    " + str(row))
+                if j < len(mat) - 1:
+                    f.write(",")
+                f.write("\n")
+            f.write("  ]")
+            if i < len(matrices) - 1:
+                f.write(",")
+            f.write("\n")
+        f.write("]\n")

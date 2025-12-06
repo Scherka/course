@@ -12,6 +12,14 @@ import koch as ko
 from code import code, decode
 import os
 
+k1 = None
+k2 = None
+redDct = None
+greenDct = None
+blueDct = None
+alphaMat = None
+img = None
+pic_split = []
 def showImage(path, wid):
     wid.hide()
     pixmapimage = QPixmap(path)
@@ -23,17 +31,25 @@ def showImage(path, wid):
 def chooseCon():
     disableInject()
     disableExtract()
-    global current_picture
-    global pic_split
-    pic_split = []
+    global img, current_picture, pic_split, redDct, greenDct, blueDct, alphaMat, k1, k2
     file_dialog = QFileDialog()
     file_dialog.setFileMode(QFileDialog.ExistingFile)
     if file_dialog.exec_():
+        pic_split = []
         current_picture = file_dialog.selectedFiles()[0]
         pic_split.append(os.path.splitext(current_picture)[0])
         pic_split.append(os.path.splitext(current_picture)[1])
+        img = Image.open(current_picture)
+        redDct, greenDct, blueDct, alphaMat = ko.readImage(img, func)
+        result, k1_, k2_ = ko.getKs(redDct, greenDct, blueDct)
+        k1 = k1_
+        k2 = k2_
+        # max_mes_len.setText(f"Максимальная длина сообщения в битах: {result}")
+        pic_name.setText(
+            f"Текущее изображение: {current_picture}\n"
+            f"Максимальная длина сообщения в битах: {result}"
+        )
         showImage(current_picture, lb_image)
-    pic_name.setText(f"Текущее изображение: {current_picture}")
 
 def chooseMes():
     global workdir2
@@ -49,6 +65,7 @@ def checkMessage():
     if line_text != "" and line_text.replace("0", "").replace("1", "") == "" and current_picture != "":
         btn_inject.setEnabled(True)
     eps_value = eps_input.text().strip()
+    
     try:
         eps_value = float(eps_value)
         ko.eps = eps_value
@@ -95,17 +112,18 @@ def disableExtract():
     btn_extract.setEnabled(False)
 
 def injectMessage():
-    global img
-    img = Image.open(current_picture)
-    redDct, greenDct, blueDct, alphaMat = ko.readImage(img, func)
+    # global img
+    # img = Image.open(current_picture)
+    # redDct, greenDct, blueDct, alphaMat = ko.readImage(img, func)
     result, k1, k2 = ko.getKs(redDct, greenDct, blueDct)
     key = f'{k1[0]}{k1[1]}{k2[0]}{k2[1]}{len(code(text_mes.text()))}'
     show_message_window("Ключ", key)
     print(key)
     print(code(text_mes.text()))
     injection_mode_text = 'lsb' if injection_mode.currentText() == "Встраивание по спирали" else 'linear'
+    # injection_mode_text = 'linear'
     imgInjected = ko.inject(img, redDct, greenDct, blueDct, alphaMat, code(text_mes.text()), k1, k2, func, funcReverse, injection_mode_text)
-    imgInjected.save( fr"{pic_split[0]}-injected{pic_split[1]}")
+    imgInjected.save( fr"{pic_split[0]}-injected_{ko.eps}{pic_split[1]}")
     # ko.writeImage(img, redDctRev, greenDctRev, blueDctRev, fr"{pic_split[0]}-injected{pic_split[1]}", funcReverse)
 
 def extractMessage():
@@ -117,14 +135,16 @@ def extractMessage():
     k1, k2, s = split_digits(extract_key.text())
     print(k1, k2, s)
     injection_mode_text = 'lsb' if extract_mode.currentText() == "Изъятие по спирали" else 'linear'
+    # injection_mode_text = 'linear'
     bin = ko.extract(img, redDct, greenDct, blueDct, k1, k2, int(s), func, injection_mode_text)
     if bin == None:
         print('Не удалось изъять сообщение')
     else:
         print(bin)
         print(decode(bin))
-        show_message_window("Изъятое сообщение", decode(bin))
+        show_message_window("Изъятое сообщение", f"{decode(bin)}\n{bin}")
 def split_digits(s: str):
+    s = s.strip()
     if not s.isdigit():
         raise ValueError("В строке должны быть только цифры")
 
@@ -176,7 +196,8 @@ injection_mode.addItem("Встраивание по спирали")
 injection_mode.addItem("Встраивание с края")
 lb_full = QLabel("Заполненный контейнер")
 btn_con = QPushButton("Выбрать изображение")
-pic_name = QLabel("Текущее изображение: ")
+pic_name = QLabel("Текущее изображение: \nМаксимальная длина сообщения в битах: ")
+# max_mes_len = QLabel("Максимальная длина сообщения в битах: ")
 btn_inject = QPushButton("Вставить сообщение")
 btn_inject.setEnabled(False)
 btn_extract = QPushButton("Изъять сообщение")
@@ -206,6 +227,7 @@ colRow1.setSpacing(0)
 colRow1.setContentsMargins(0, 0, 0, 0)
 colRow1.addWidget(btn_con)
 colRow1.addWidget(pic_name, alignment=Qt.AlignTop | Qt.AlignHCenter)
+# colRow1.addWidget(max_mes_len, alignment=Qt.AlignTop | Qt.AlignHCenter)
 row1.addLayout(colRow1)
 row2.addWidget(lb_image, alignment=Qt.AlignCenter)
 row3.addWidget(text_mes)
@@ -236,6 +258,7 @@ btn_inject.clicked.connect(injectMessage)
 btn_extract.clicked.connect(extractMessage)
 
 extract_key.textChanged.connect(disableExtract)
+eps_input.textChanged.connect(disableInject)
 # k1_mes.textChanged.connect(disableExtract)
 # k2_mes.textChanged.connect(disableExtract)
 win.show()
